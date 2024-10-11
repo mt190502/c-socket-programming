@@ -8,7 +8,7 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
-#define BACKLOG 1              //- If the server is busy, it will allow up to 3 pending connections
+#define BACKLOG 1              //- If the server is busy, it will allow up to 1 pending connections
 #define BUFFER_SIZE 1024       //- Message buffer size
 #define SERVER_IP "127.0.0.1"  //- Server IP address
 #define SERVER_PORT 8080       //- Server sport number
