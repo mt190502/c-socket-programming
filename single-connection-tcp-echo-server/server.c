@@ -8,7 +8,7 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
-#define BACKLOG 1              //- If the server is busy, it will allow up to 1 pending connections
+#define BACKLOG 1              //- If the server is busy, it will allow up to 1 pending connections (if linux, you can set it to SOMAXCONN)
 #define BUFFER_SIZE 1024       //- Message buffer size
 #define SERVER_IP "127.0.0.1"  //- Server IP address
 #define SERVER_PORT 8080       //- Server sport number
@@ -99,8 +99,8 @@ int main(void) {
             buffer[bytes_received] = '\0';  //- Add a null terminator to the end of the message.
 
             //- Print the received message from the client.
-            printf("received message from %s:%d (%4d byte): %s\n", inet_ntoa(client_addr.sin_addr),
-                   ntohs(client_addr.sin_port), bytes_received, buffer);
+            printf("received message from %s:%d (%4d byte): %s\n", inet_ntoa(client_addr.sin_addr), ntohs(client_addr.sin_port), bytes_received,
+                   buffer);
 
             //* Echo the message back to the client
             //- The send() syscall sends the message back to the client.
@@ -112,8 +112,8 @@ int main(void) {
                 perror("error: socket sending failed, aborting...");
                 return 1;
             } else {
-                printf("     reply message to %s:%d (%4d byte): %s\n", inet_ntoa(client_addr.sin_addr),
-                       ntohs(client_addr.sin_port), bytes_received, buffer);
+                printf("     reply message to %s:%d (%4d byte): %s\n", inet_ntoa(client_addr.sin_addr), ntohs(client_addr.sin_port), bytes_received,
+                       buffer);
             }
         }
 
