@@ -13,11 +13,10 @@
 #define SERVER_PORT 8080       //- Server port number
 
 int main(void) {
-    int server_fd;                                //- Define a file descriptor for the server socket
+    int sock_fd;                                  //- Define a file descriptor for the server socket
     struct sockaddr_in server_addr, client_addr;  //- Define structs for the server and client addresses
     char buffer[BUFFER_SIZE];                     //- Define a buffer to store the received message
-    socklen_t addr_len;                           //- Define the length of the client address
-    ssize_t numbytes;                             //- Define a variable to store the size of the received message
+    ssize_t bytes_received;                       //- Define a variable to store the size of the received message
 
     //* Create a socket for the server
     //- The socket() syscall creates a new socket and returns a file descriptor that refers to that socket.
@@ -25,7 +24,7 @@ int main(void) {
     //- The 2nd argument, SOCK_DGRAM, specifies the type of the socket. SOCK_DGRAM is used for UDP sockets.
     //- The 3rd argument, IPPROTO_UDP, specifies the protocol to be used with the socket.
     //? If the socket() syscall fails, it returns -1.
-    if ((server_fd = socket(PF_INET, SOCK_DGRAM, IPPROTO_UDP)) == -1) {
+    if ((sock_fd = socket(PF_INET, SOCK_DGRAM, IPPROTO_UDP)) == -1) {
         perror("error: socket creation failed, aborting...");
         return EXIT_FAILURE;
     }
@@ -46,9 +45,9 @@ int main(void) {
     //- The 2nd argument, (struct sockaddr*)&server_addr, specifies the server address.
     //- The 3rd argument, sizeof(server_addr), specifies the size of the server address.
     //? If the bind() syscall fails, it returns -1.
-    if (connect(server_fd, (struct sockaddr*)&server_addr, sizeof server_addr) == -1) {
+    if (connect(sock_fd, (struct sockaddr*)&server_addr, sizeof server_addr) == -1) {
         perror("error: socket connection failed, aborting...");
-        close(server_fd);
+        close(sock_fd);
         return EXIT_FAILURE;
     }
 
@@ -64,13 +63,16 @@ int main(void) {
         if (fgets(buffer, BUFFER_SIZE, stdin) == NULL) {
             if (feof(stdin)) {  //- Check if the end of the file has been reached
                 printf("EOF\n");
-                break;
+                close(sock_fd);  //- Close the client socket
+                return EXIT_SUCCESS;
             }
             perror("error: reading from stdin failed, aborting...");
-            break;
+            return EXIT_FAILURE;
         }
 
         buffer[strcspn(buffer, "\n")] = '\0';  //- Remove the newline character from the buffer
+        if (strlen(buffer) == 0)
+            continue;  //- Skip empty messages
 
         //* Send the message to the server
         //- The sendto() syscall sends the message to the server socket.
@@ -81,12 +83,10 @@ int main(void) {
         //- The 5th argument, (struct sockaddr*)&server_addr, specifies the server address.
         //- The 6th argument, sizeof(server_addr), specifies the size of the server address.
         //? If the sendto() syscall fails, it returns -1.
-        if (sendto(server_fd, buffer, strlen(buffer), 0, (struct sockaddr*)&server_addr, sizeof server_addr) == -1) {
+        if (sendto(sock_fd, buffer, strlen(buffer), 0, (struct sockaddr*)&server_addr, sizeof server_addr) == -1) {
             perror("error: message sending failed, aborting...");
-            break;
+            return EXIT_FAILURE;
         }
-
-        addr_len = sizeof(client_addr);  //- addr_len is required to store the size of the client address
 
         //* Receive messages from the server
         //- The recvfrom() syscall receives messages from the server.
@@ -97,16 +97,13 @@ int main(void) {
         //- The 5th argument, (struct sockaddr*)&client_addr, specifies the client address.
         //- The 6th argument, &addr_len, specifies the size of the client address.
         //? If the recvfrom() syscall fails, it returns -1.
-        if ((numbytes = recvfrom(server_fd, buffer, BUFFER_SIZE - 1, 0, (struct sockaddr*)&client_addr, &addr_len)) == -1) {
-            perror("error: message receiving failed, aborting...");
-            break;
+        if ((bytes_received = recvfrom(sock_fd, buffer, BUFFER_SIZE - 1, 0, (struct sockaddr*)&client_addr, &(socklen_t){sizeof(client_addr)})) > 0) {
+            buffer[bytes_received] = '\0';  //- Add a null terminator to the end of the buffer
+            printf("server> %s\n", buffer);
         }
-
-        buffer[numbytes] = '\0';  //- Add a null terminator to the end of the buffer
-        printf("server> %s\n", buffer);
     }
 
-    //* Close the server socket
-    close(server_fd);
-    return 0;
+    //* Close the client socket
+    close(sock_fd);
+    return EXIT_SUCCESS;
 }

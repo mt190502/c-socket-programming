@@ -1,18 +1,20 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/types.h>
 #include <unistd.h>
 #include <sys/socket.h>
 #include <sys/un.h>
+#include <errno.h>
 
 #define BUFFER_SIZE 1024                            //- Message buffer size
 #define SERVER_SOCKET_FILE "/tmp/echo_server.sock"  //- Server socket file path
 
 int main(void) {
-    int server_fd;                   //- Define a file descriptor for the server socket
+    int sock_fd;                     //- Define a file descriptor for the server socket
     struct sockaddr_un server_addr;  //- Define a struct for the server address
     char buffer[BUFFER_SIZE];        //- Define a buffer to store the received message
-    ssize_t numbytes;                //- Define a variable to store the size of the received message
+    ssize_t bytes_received;          //- Define a variable to store the size of the received message
 
     //* Create a socket for the server
     //- The socket() syscall creates a new socket and returns a file descriptor that refers to that socket.
@@ -20,7 +22,7 @@ int main(void) {
     //- The 2nd argument, SOCK_STREAM, specifies the type of the socket. SOCK_STREAM is used for stream-oriented sockets.
     //- The 3rd argument, 0, specifies the protocol to be used with the socket.
     //? If the socket() syscall fails, it returns -1.
-    if ((server_fd = socket(AF_UNIX, SOCK_STREAM, 0)) == -1) {
+    if ((sock_fd = socket(AF_UNIX, SOCK_STREAM, 0)) == -1) {
         perror("error: socket creation failed, aborting...");
         return EXIT_FAILURE;
     }
@@ -39,10 +41,16 @@ int main(void) {
     //- The 2nd argument, (struct sockaddr*)&server_addr, specifies the server address.
     //- The 3rd argument, sizeof(server_addr), specifies the size of the server address.
     //? If the connect() syscall fails, it returns -1.
-    if (connect(server_fd, (struct sockaddr*)&server_addr, sizeof server_addr) == -1) {
-        perror("error: socket connection failed, aborting...");
-        close(server_fd);
-        return EXIT_FAILURE;
+    if (connect(sock_fd, (struct sockaddr*)&server_addr, sizeof server_addr) == -1) {
+        if (errno == ENOENT) {
+            printf("error: server socket file '%s' not found, aborting...", SERVER_SOCKET_FILE);
+            close(sock_fd);
+            return EXIT_FAILURE;
+        } else {
+            perror("error: socket connection failed, aborting...");
+            close(sock_fd);
+            return EXIT_FAILURE;
+        }
     }
 
     //* while loop to send and receive messages
@@ -56,13 +64,16 @@ int main(void) {
         //- The 3rd argument, stdin, specifies the input stream.
         if (fgets(buffer, BUFFER_SIZE, stdin) == NULL) {
             if (feof(stdin)) {  //- Check if the end of the file has been reached
-                printf("EOF\n");
-                return 0;
+                printf("EOF");
+                close(sock_fd);
+                return EXIT_SUCCESS;
             }
             perror("error: reading from stdin failed, aborting...");
-            break;
+            return EXIT_FAILURE;
         }
-        buffer[strcspn(buffer, "\n")] = '\0';  //- Remove the newline character from the end of the buffer
+        buffer[strcspn(buffer, "\n")] = '\0';  //- Remove the newline character from the buffer
+        if (strlen(buffer) == 0)
+            continue;  //- Skip empty messages
 
         //* Write messages to the server
         //- The write() syscall sends messages to the server.
@@ -70,13 +81,11 @@ int main(void) {
         //- The 2nd argument, buffer, specifies the buffer that contains the message to be sent.
         //- The 3rd argument, strlen(buffer), specifies the size of the message.
         //? If the write() syscall fails, it returns -1.
-        if (write(server_fd, buffer, strlen(buffer)) == -1) {
+        if (write(sock_fd, buffer, strlen(buffer)) == -1) {
             perror("error: message sending failed, aborting...");
-            close(server_fd);
+            close(sock_fd);
             return EXIT_FAILURE;
         }
-
-        memset(buffer, 0, BUFFER_SIZE);  //- Clear the buffer
 
         //* Read messages from the server
         //- The read() syscall receives messages from the server.
@@ -84,20 +93,13 @@ int main(void) {
         //- The 2nd argument, buffer, specifies the buffer to store the received message.
         //- The 3rd argument, BUFFER_SIZE, specifies the size of the buffer.
         //? If the read() syscall fails, it returns -1.
-        if ((numbytes = read(server_fd, buffer, BUFFER_SIZE)) == -1) {
-            perror("error: message receiving failed, aborting...");
-            close(server_fd);
-            return EXIT_FAILURE;
+        if ((bytes_received = read(sock_fd, buffer, BUFFER_SIZE)) > 0) {
+            buffer[bytes_received] = '\0';  //- Add a null terminator to the end of the buffer
+            printf("server> %s\n", buffer);
         }
-
-        buffer[numbytes] = '\0';  //- Add a null terminator to the end of the buffer
-        if (buffer[0] == '\0') {  //- If the buffer is empty, skip the message
-            continue;
-        }
-
-        printf("server> %s\n", buffer);
     }
 
-    close(server_fd);  //- Close the client socket
-    return 0;
+    //* Close the client socket
+    close(sock_fd);
+    return EXIT_SUCCESS;
 }
