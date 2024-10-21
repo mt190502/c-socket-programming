@@ -1,4 +1,4 @@
-SUBDIRS = single-connection-tcp-echo-server single-connection-unix-socket-echo-server udp-echo-server
+SUBDIRS = single-connection-tcp-echo-server single-connection-unix-socket-echo-server udp-echo-server multi-connection-tcp-echo-server
 
 all: compile move 
 
